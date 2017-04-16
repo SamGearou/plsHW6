@@ -171,9 +171,32 @@ interp (Seq (Lambda x y) z) = interp (replace x y z)
 interp (Seq (Seq a b) z) = interp (Seq (interp (Seq a b)) z)
 interp x = x
 
-convert :: Maybe (LC, String) -> String
-convert (Just (a,b)) = show (interp (sub Map.empty a))
-convert Nothing    = "Not a valid Lambda"
+true :: LC
+true  = Lambda ["a", "b"] (Var "a")
+
+false :: LC
+false = Lambda ["a", "b"] (Var "b")
+
+isZero :: LC
+isZero = Lambda ["n"] (Seq (Seq (Var "n") (Lambda ["x"] false)) true)
+
+pair :: LC
+pair = Lambda ["a", "b"] (Lambda ["c"] (Seq (Seq (Var "c") (Var "a")) (Var "b")))
+
+fst' :: LC
+fst'  = Lambda ["p"] (Seq (Var "p") (Lambda ["f", "t"] (Var "f")))
+
+snd' :: LC
+snd'  = Lambda ["p"] (Seq (Var "p") (Lambda ["f", "t"]  (Var "t")))
+
+pred_zero :: LC
+pred_zero = Seq (Seq pair zero) zero
+
+pred_succ :: LC
+pred_succ = Lambda ["p"] (Seq (Seq pair (Seq Hw6.succ (Seq fst' (Var "p")))) (Seq fst' (Var "p")))
+
+pred' :: LC
+pred' = Lambda ["n"] (Seq snd' (Seq (Seq (Var "n") pred_succ) pred_zero))
 
 zero :: LC
 zero = Lambda ["s", "z"] (Var "z")
@@ -190,6 +213,13 @@ succ = Lambda ["w", "y", "x"] (Seq (Var "y") (Seq (Seq (Var "w") (Var "y")) (Var
 plus :: LC
 plus = Lambda ["m", "n"] (Seq (Seq (Var "m") (Hw6.succ))  (Var "n"))
 
+yCombinator :: LC
+yCombinator = Lambda ["f"] (Seq (Lambda ["x"] (Seq (Var "f") (Seq (Var "x") (Var "x")))) (Lambda ["x"] (Seq (Var "f") (Seq (Var "x") (Var "x")))))
+
+fact :: LC
+fact = Seq yCombinator (Lambda ["factRec", "n"] (Seq (Seq (Seq isZero (Var "n")) one) (Seq (Var "factRec") (Seq pred' (Var "n")))))
+
+--(λf. λn. cond (= n 0) 1 (∗ n (f (− n 1))))
 
 reduce' :: LC -> LC
 reduce' (Lambda x (Seq (Var a) b)) = Lambda x  (Seq (Var a) (reduce'(interp b)))
@@ -260,60 +290,11 @@ getN lc lst = if (isN lst) then
 main :: IO ()
 main = getArgs >>= (\x -> getDash x >>= (\y -> getC y x))
 
--- main :: IO ()
--- main = do 
---         args <- getArgs
---         if (length args == 0) then do
---           string <- getContents
---           if (isJust (parse assign string)) then do 
---             putStr (convert (parse assign string))
---           else
---             do
---               die "Ya done messed up"
-                                                             
---         else if (length args >=1) then do
---              if ((elem "-nc" args || elem "-cn" args) && elem "-" args) then do
---                 string <- getContents
---                 if (isJust (parse assign string) && (isScoped [] (interp (sub Map.empty (fst (fromJust(parse assign string))))))) then do
---                    putStr (validNumeral (reduce' (interp (sub Map.empty (fst (fromJust (parse assign string)))))))
---                 else 
---                   do
---                     die "Not well scoped"
-
---              else if ((elem "-" args) && (elem "-c" args)) then do
---                 string <- getContents
---                 if (isJust (parse assign string) && (isScoped [] (interp (sub Map.empty (fst (fromJust(parse assign string))))))) then do
---                    putStr (convert (parse assign string))
---                 else 
---                   do
---                     die "Not well scoped"
-
---              else if (elem "-" args) then do
---                string2 <- getContents
---                putStr (convert (parse assign string2))
-
---              else if (elem "-c" args) then do
---                file <- readFile (head (filter (\x -> x /= "-c") args))
---                if (isJust (parse assign file) && (isScoped [] (interp (sub Map.empty (fst (fromJust(parse assign file))))))) then do
---                  putStr (convert (parse assign file))
---                else
---                  do
---                   die "Not well scoped"
-                  
---              else
---                 do
---                  file <- readFile (head args)
---                  if (isJust (parse assign file)) then do 
---                  putStr (convert (parse assign file))
---                  else 
---                     do
---                       die "Ya done messed up"
---         else
---            do
---             die "Ya done messed up"
-
-
 isScoped :: [String] -> LC -> Bool
 isScoped lst (Var x) = elem x lst
-isScoped lst (Seq x y) = (isScoped lst x) && (isScoped lst y)
+isScoped lst (Seq x y) = isScoped' lst x
+     where isScoped' lst (Var x) = elem x lst
+           isScoped' lst (Seq x y) = (isScoped' lst x) && (isScoped' lst y)
+           isScoped' lst (Lambda x y) = isScoped' (lst ++ x) y
 isScoped lst (Lambda x y) = isScoped (lst ++ x) y
+
