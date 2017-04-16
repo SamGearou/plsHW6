@@ -172,10 +172,10 @@ interp (Seq (Seq a b) z) = interp (Seq (interp (Seq a b)) z)
 interp x = x
 
 true :: LC
-true  = Lambda ["a", "b"] (Var "a")
+true  = Lambda ["a", "b"] (Seq (Var "a") (Lambda ["x"] (Var "x")))
 
 false :: LC
-false = Lambda ["a", "b"] (Var "b")
+false = Lambda ["a", "b"] (Seq (Var "b") (Lambda ["x"] (Var "x")))
 
 isZero :: LC
 isZero = Lambda ["n"] (Seq (Seq (Var "n") (Lambda ["x"] false)) true)
@@ -207,17 +207,32 @@ one = Lambda ["s", "z"] (Seq (Var "s") (Var "z"))
 two :: LC
 two = Lambda ["s", "z"] (Seq (Var "s") (Seq (Var "s") (Var "z")))
 
+three :: LC
+three = Lambda ["s", "z"] (Seq (Var "s") (Seq (Var "s") (Seq (Var "s") (Var "z"))))
+
+four :: LC
+four = Lambda ["s", "z"] (Seq (Var "s") (Seq (Var "s") (Seq (Var "s") (Seq (Var "s") (Var "z")))))
+
+five :: LC
+five = Lambda ["s", "z"] (Seq (Var "s") (Seq (Var "s") (Seq (Var "s") (Seq (Var "s") (Seq (Var "s") (Var "z"))))))
+
 succ :: LC
 succ = Lambda ["w", "y", "x"] (Seq (Var "y") (Seq (Seq (Var "w") (Var "y")) (Var "x")))
 
 plus :: LC
 plus = Lambda ["m", "n"] (Seq (Seq (Var "m") (Hw6.succ))  (Var "n"))
 
+times :: LC
+times = Lambda ["m", "n"] (Seq (Seq (Var "m") (Seq plus (Var "n"))) zero)  
+
 yCombinator :: LC
 yCombinator = Lambda ["f"] (Seq (Lambda ["x"] (Seq (Var "f") (Seq (Var "x") (Var "x")))) (Lambda ["x"] (Seq (Var "f") (Seq (Var "x") (Var "x")))))
 
+cbvYCombinator :: LC
+cbvYCombinator = Lambda ["f"] (Seq (Lambda ["x","y"] (Seq (Seq (Var "f") (Seq (Var "x") (Var "x"))) (Var "y"))) (Lambda ["x","y"] (Seq (Seq (Var "f") (Seq (Var "x") (Var "x"))) (Var "y"))))
+
 fact :: LC
-fact = Seq yCombinator (Lambda ["factRec", "n"] (Seq (Seq (Seq isZero (Var "n")) one) (Seq (Var "factRec") (Seq pred' (Var "n")))))
+fact = Seq cbvYCombinator (Lambda ["factRec", "n"] (Seq (Seq (Seq isZero (Var "n")) (Lambda ["x"] (one))) (Lambda ["x"] (Seq (Seq times (Var "n")) (Seq (Var "factRec") (Seq pred' (Var "n")))))))
 
 --(λf. λn. cond (= n 0) 1 (∗ n (f (− n 1))))
 
