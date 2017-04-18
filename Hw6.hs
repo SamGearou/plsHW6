@@ -60,7 +60,7 @@ char' :: Char -> Parser Char
 char' c = spaces' *> satisfy (==c)
 
 var' :: Parser String
-var' = ensure (not . isKeyword) $ spaces' *> some (satisfy isAlpha)
+var' = ensure (not . isKeyword) $ spaces' *> (Parser $ \s -> if (isAlpha (head s)) then Just("", s) else Nothing) *> many (satisfy isAlphaNum)
 
 isDot :: Char -> Bool
 isDot c = c == '.'
@@ -103,7 +103,7 @@ str' s = spaces' *> loop s
         loop (c:cs) = (:) <$> satisfy (==c) <*> loop cs        
 
 var :: Parser String
-var = ensure (not . isKeyword) $ ws *> some (satisfy isAlpha)
+var = ensure (not . isKeyword) $ ws *> (Parser $ \s -> if (length s /= 0 && isAlpha (head s)) then Just("", s) else Nothing) *> many (satisfy isAlphaNum)
 
 ensure :: (a -> Bool) -> Parser a -> Parser a
 ensure p parser = Parser $ \s ->
@@ -115,7 +115,7 @@ ensure p parser = Parser $ \s ->
 --  <|> str "lambda " *> spaces *> Lambda <$> many (satisfy noDot) <* (char '.' <* spaces)  
 
 sequence', assign, lam, atom :: Parser LC
-assign = Assign <$> (spaces *> str "let" *> var' <* char' '=') <*> lam <* str' "in" <*> assign
+assign = Assign <$> (spaces *> str "let" *> var' <* char '=') <*> lam <* str' "in" <*> assign
        <|> lam
 lam = (Lambda . (explode [])) <$> (spaces *> str "lambda" *> spaces' *> some (satisfy (not . isDot)) <* char '.') <*> lam
   <|> sequence'
@@ -133,8 +133,32 @@ sub m (Var x) = case Map.lookup x m of
              Just v  -> v
              Nothing -> Var x
 sub m (Seq x y) = Seq (sub m x) (sub m y)
-sub m (Lambda x y) = Lambda x (sub m y)
+sub m (Lambda x y) = Lambda x (sub (removeFromMap x m) y)
 sub m (Assign x y rest) = sub (Map.insert x (sub m y) m) rest
+
+removeFromMap :: [String] -> Map String LC -> Map String LC
+removeFromMap [] m     = m
+removeFromMap (x:xs) m = removeFromMap xs (Map.delete x m)
+
+sub' :: [String] -> Map String LC -> LC -> Bool
+sub' lst m (Assign x (Var y) rest) = case Map.lookup y m of
+                                  Just v  -> sub' lst (Map.insert x (sub m (Var y)) m) rest
+                                  Nothing -> False
+sub' lst m (Assign x y rest) = case isScoped [] (sub m y) of
+                             True  -> sub' lst (Map.insert x (sub m y) m) rest
+                             False -> False
+sub' lst m x = True
+
+isValidLC :: LC -> Bool
+isValidLC (Var y) = False
+isValidLC _       = True 
+
+checkValid :: Map String LC -> LC -> Bool
+checkValid m (Assign x y rest) = if (isValidLC (sub m y)) then
+                                  checkValid (Map.insert x (sub m y) m) rest
+                                 else
+                                  False
+checkValid m _                 = True
 
 replace :: [String] -> LC -> LC -> LC
 replace [x] l (Var a) = if (a == x) then
@@ -225,6 +249,9 @@ plus = Lambda ["m", "n"] (Seq (Seq (Var "m") (Hw6.succ))  (Var "n"))
 times :: LC
 times = Lambda ["m", "n"] (Seq (Seq (Var "m") (Seq plus (Var "n"))) zero)  
 
+minus :: LC
+minus = Lambda ["m", "n"] (Seq (Seq (Var "n") pred') (Var "m"))
+
 yCombinator :: LC
 yCombinator = Lambda ["f"] (Seq (Lambda ["x"] (Seq (Var "f") (Seq (Var "x") (Var "x")))) (Lambda ["x"] (Seq (Var "f") (Seq (Var "x") (Var "x")))))
 
@@ -288,28 +315,30 @@ getDash lst = if (isDash lst) then
 
 getC :: String -> [String] -> IO ()
 getC str lst = if (isC lst) then
-                 if (isJust (parse assign str) && (isScoped [] (interpString))) then                           
+                 if (isJust (parse assign str) && (sub' lst Map.empty (fst (fromJust(parse assign str)))) && (isScoped [] checkString)) then                           
                    getN (interpString) lst
                  else
                    die "Not well scoped"
                else
-                 getN (interpString) lst
+                 if (isJust (parse assign str) && checkValid Map.empty (fst (fromJust(parse assign str))) && isValidLC interpString) then
+                   getN (interpString) lst
+                 else
+                   die "Not a valid Lambda expression"
             where interpString = interp (sub Map.empty (fst (fromJust(parse assign str))))
+                  checkString  = sub Map.empty (fst (fromJust(parse assign str)))
 
 getN :: LC -> [String] -> IO ()
 getN lc lst = if (isN lst) then
-                 putStr (validNumeral (reduce' lc))
-               else
+                 putStr (validNumeral converted)
+              else
                  putStr (show (interp lc))
+          where converted = reduce' (interp (Seq (Seq minus (Seq (Seq plus one) lc)) one))
+
 
 main :: IO ()
 main = getArgs >>= (\x -> getDash x >>= (\y -> getC y x))
 
 isScoped :: [String] -> LC -> Bool
 isScoped lst (Var x) = elem x lst
-isScoped lst (Seq x y) = isScoped' lst x
-     where isScoped' lst (Var x) = elem x lst
-           isScoped' lst (Seq x y) = (isScoped' lst x) && (isScoped' lst y)
-           isScoped' lst (Lambda x y) = isScoped' (lst ++ x) y
+isScoped lst (Seq x y) = (isScoped lst x) && (isScoped lst y)
 isScoped lst (Lambda x y) = isScoped (lst ++ x) y
-

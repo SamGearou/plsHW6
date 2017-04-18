@@ -1,1 +1,1 @@
-lambda s z. s ((lambda s z. s ((lambda s z. s ((lambda s z. z) s z)) s z)) s z)
+let zero = lambda s z. z in

@@ -1,0 +1,15 @@
+let zero = lambda s z. z in
+let one = lambda s z. s z in
+let five = lambda s z. s (s (s (s (s z)))) in
+let true  = lambda a b. a (lambda x. x) in
+let false = lambda a b. b (lambda x. x) in
+let succ = lambda n s z. s (n s z) in
+let plus = lambda m n. m succ n in
+let times = lambda m n. m (plus n) zero in
+let isZero = lambda n. n (lambda x. false) true in
+let pair = lambda a b c. c a b in
+let fst  = lambda p. p (lambda f t. f) in
+let snd  = lambda p. p (lambda f t. t) in
+let pred = lambda n. snd (n (lambda p. pair (succ (fst p)) (fst p)) (pair zero zero)) in 
+let cbvYCombinator = lambda f. (lambda x y. f (x x) y) (lambda x y. f (x x) y) in
+cbvYCombinator (lambda factRec n. (isZero n) (lambda x. one) (lambda x. (times n (factRec (pred n))))) five
