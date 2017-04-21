@@ -48,7 +48,8 @@ instance Show LC where
   show (Seq a (Lambda x y))            = parens' (show a) ++ " " ++ parens' (show (Lambda x y))
   show (Seq (Lambda x y) a)            = parens' (show (Lambda x y)) ++ " " ++ parens' (show a)
   show (Seq a (Seq x y))               = show a ++ " " ++ parens' (show (Seq x y))
-  show (Seq x y)                       = show x ++ " " ++ show y    
+  show (Seq x y)                       = show x ++ " " ++ show y 
+  show (Assign x y z)                  = "let " ++ x ++ " " ++ show y ++ " in " ++ show z   
 
 parens' :: String -> String
 parens' a = "(" ++ a ++ ")"
@@ -60,7 +61,7 @@ char' :: Char -> Parser Char
 char' c = spaces' *> satisfy (==c)
 
 var' :: Parser String
-var' = ensure (not . isKeyword) $ spaces' *> (Parser $ \s -> if (isAlpha (head s)) then Just("", s) else Nothing) *> many (satisfy isAlphaNum)
+var' = ensure (not . isKeyword) $ spaces' *> (Parser $ \s -> if (isAlpha (head s)) then Just("", s) else Nothing) *> many (satisfy isAlphaNumOrQuote)
 
 isDot :: Char -> Bool
 isDot c = c == '.'
@@ -77,6 +78,9 @@ satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = Parser f
   where f [] = Nothing
         f (x:xs) = if p x then Just (x,xs) else Nothing
+
+isAlphaNumOrQuote :: Char -> Bool
+isAlphaNumOrQuote x = (isAlphaNum x) || (x == '\'')
 
 spaces :: Parser ()
 spaces = many (satisfy isSpace) *> pure ()
@@ -103,7 +107,7 @@ str' s = spaces' *> loop s
         loop (c:cs) = (:) <$> satisfy (==c) <*> loop cs        
 
 var :: Parser String
-var = ensure (not . isKeyword) $ ws *> (Parser $ \s -> if (length s /= 0 && isAlpha (head s)) then Just("", s) else Nothing) *> many (satisfy isAlphaNum)
+var = ensure (not . isKeyword) $ ws *> (Parser $ \s -> if (length s /= 0 && isAlpha (head s)) then Just("", s) else Nothing) *> many (satisfy isAlphaNumOrQuote)
 
 ensure :: (a -> Bool) -> Parser a -> Parser a
 ensure p parser = Parser $ \s ->
@@ -134,7 +138,9 @@ sub m (Var x) = case Map.lookup x m of
              Nothing -> Var x
 sub m (Seq x y) = Seq (sub m x) (sub m y)
 sub m (Lambda x y) = Lambda x (sub (removeFromMap x m) y)
-sub m (Assign x y rest) = sub (Map.insert x (sub m y) m) rest
+sub m (Assign x y rest) = case interp (sub m y) of
+                           (Var interpreted) -> sub (Map.insert x (Var interpreted) m) rest
+                           test        -> sub (Map.insert x test m) rest
 
 removeFromMap :: [String] -> Map String LC -> Map String LC
 removeFromMap [] m     = m
